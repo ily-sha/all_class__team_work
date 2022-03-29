@@ -41,13 +41,15 @@ class InputBox:
         pygame.draw.rect(screen, self.color, self.rect, 2)
 
 
-def get_map(lon, lat):
+def get_map(lon, lat, pin=False):
     global map_file
     params = {
         "ll": ",".join(map(str, [lon, lat])),
         "spn": ",".join(["0.04", "0.04"]),
         "l": "map"
     }
+    if pin:
+        params["pt"] = f"{','.join(map(str, [lon, lat]))},pm2rdm"
     api_server = "http://static-maps.yandex.ru/1.x/"
     response = requests.get(api_server, params)
     if not response:
@@ -98,8 +100,8 @@ while True:
             json_response = response.json()
             toponym = json_response["response"]["GeoObjectCollection"][
                 "featureMember"][0]["GeoObject"]
-            longitude, latitude = toponym["Point"]["pos"].split()
-            get_map(longitude, latitude)
+            longitude, latitude = map(float, toponym["Point"]["pos"].split())
+            get_map(longitude, latitude, pin=True)
         input_box.handle_event(event)
     screen.blit(pygame.image.load(map_file), (0, 0))
     input_box.draw(screen)
