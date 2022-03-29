@@ -2,11 +2,11 @@ import pygame
 import requests
 import os
 
-lon = "37.530887"
-lat = "55.703118"
+longitude = 37.530887
+latitude = 55.703118
 
 map_file = "map.png"
-search = ""
+search_request = ""
 
 
 class InputBox:
@@ -19,7 +19,7 @@ class InputBox:
         self.active = False
 
     def handle_event(self, event):
-        global search
+        global search_request
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.rect.collidepoint(event.pos):
                 self.active = not self.active
@@ -28,13 +28,11 @@ class InputBox:
             self.color = pygame.Color((232, 70, 37)) if self.active else pygame.Color((0, 0, 0))
         if event.type == pygame.KEYDOWN:
             if self.active:
-                if event.key == pygame.K_RETURN:
-                    search = self.text
-                    self.color = pygame.Color((0, 0, 255))
-                elif event.key == pygame.K_BACKSPACE:
+                if event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
                 else:
                     self.text += event.unicode
+                search_request = self.text
                 self.text_render = self.font.render(self.text, True, pygame.Color(0, 0, 0))
 
     def draw(self, screen):
@@ -43,35 +41,28 @@ class InputBox:
         pygame.draw.rect(screen, self.color, self.rect, 2)
 
 
-def paint_map(left=False, right=False, up=False, down=False):
-    global map_file, lat, lon
-    if left:
-        lon = str(float(lon) - 0.05)
-    elif right:
-        lon = str(float(lon) + 0.05)
-    elif up:
-        lat = str(float(lat) + 0.02)
-    elif down:
-        lat = str(float(lat) - 0.02)
-
-    params = {"ll": ",".join([lon, lat]), "spn": ",".join(["0.04", "0.04"]), "l": "map"}
+def get_map(lon, lat):
+    global map_file
+    params = {
+        "ll": ",".join(map(str, [lon, lat])),
+        "spn": ",".join(["0.04", "0.04"]),
+        "l": "map"
+    }
     api_server = "http://static-maps.yandex.ru/1.x/"
     response = requests.get(api_server, params)
-
     if not response:
         print("Ошибка выполнения запроса:")
         print(api_server)
         print("Http статус:", response.status_code, "(", response.reason, ")")
         exit(1)
-
-    # Запишем полученное изображение в файл.
     map_file = "map.png"
     with open(map_file, "wb") as file:
         file.write(response.content)
 
 
-paint_map()
+get_map(longitude, latitude)
 pygame.init()
+pygame.display.set_caption("Яндекс карты lite")
 screen = pygame.display.set_mode((600, 450))
 screen.blit(pygame.image.load(map_file), (0, 0))
 input_box = InputBox(50, 50, 400, 20)
@@ -84,15 +75,31 @@ while True:
         if event.type == pygame.QUIT:
             os.remove(map_file)
             exit(0)
-        elif event.type == pygame.KEYDOWN:
+        if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_LEFT:
-                paint_map(left=True)
+                longitude -= 0.05
             elif event.key == pygame.K_RIGHT:
-                paint_map(right=True)
+                longitude += 0.05
             elif event.key == pygame.K_DOWN:
-                paint_map(down=True)
+                latitude -= 0.02
             elif event.key == pygame.K_UP:
-                paint_map(up=True)
+                latitude += 0.02
+            get_map(longitude, latitude)
+        if (event.type == pygame.MOUSEBUTTONDOWN
+            and event.pos[0] in range(460, 561)
+            and event.pos[1] in range(50, 71)) \
+                or (event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN):
+            geocoder_api_server = "http://geocode-maps.yandex.ru/1.x/"
+            geocoder_params = {
+                "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
+                "geocode": search_request,
+                "format": "json"}
+            response = requests.get(geocoder_api_server, params=geocoder_params)
+            json_response = response.json()
+            toponym = json_response["response"]["GeoObjectCollection"][
+                "featureMember"][0]["GeoObject"]
+            longitude, latitude = toponym["Point"]["pos"].split()
+            get_map(longitude, latitude)
         input_box.handle_event(event)
     screen.blit(pygame.image.load(map_file), (0, 0))
     input_box.draw(screen)
@@ -101,4 +108,3 @@ while True:
     text = font.render("Найти", True, pygame.Color(0, 0, 0))
     screen.blit(text, (487, 52))
     pygame.display.flip()
-
